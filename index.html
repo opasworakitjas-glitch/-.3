@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Probability 3D Interactive</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        /* Ensure range slider is easy to touch on mobile */
+        input[type=range] {
+            height: 32px;
+            -webkit-appearance: none;
+            margin: 10px 0;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* 3D Canvas Container */
+        #canvas-container {
+            width: 100%;
+            height: 250px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background: #1e293b;
+            position: relative;
+        }
+        
+        /* Table Styles */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- Header & Language Toggle -->
+        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+            <div class="text-center md:text-left mb-4 md:mb-0">
+                <h1 id="mainTitle" class="text-2xl md:text-3xl font-bold text-slate-900">การทดลองสุ่มและความน่าจะเป็น</h1>
+                <p id="mainSubtitle" class="text-sm md:text-base text-slate-500 mt-1">เรียนรู้ความน่าจะเป็นผ่านการทดลองสุ่มและ 3D</p>
+            </div>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button id="btnTH" onclick="setLanguage('th')" class="px-4 py-2 text-sm font-medium rounded-md bg-white shadow-sm text-slate-800">TH</button>
+                <button id="btnEN" onclick="setLanguage('en')" class="px-4 py-2 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-colors">EN</button>
+            </div>
+        </div>
+
+        <!-- Theory Box -->
+        <div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded-r-xl">
+            <h2 id="theoryTitle" class="text-lg font-bold text-blue-900 mb-2">ทบทวนทฤษฎีความน่าจะเป็น</h2>
+            <div class="bg-white px-4 py-3 rounded-lg border border-blue-200 text-center text-blue-700 font-mono text-xl mb-3 shadow-sm">
+                P(E) = n(E) / n(S)
+            </div>
+            <ul id="theoryList" class="text-sm md:text-base text-blue-800 space-y-1 list-disc list-inside">
+                <li><strong>P(E)</strong> คือ ความน่าจะเป็นของเหตุการณ์</li>
+                <li><strong>n(E)</strong> คือ จำนวนผลลัพธ์ของเหตุการณ์ที่เราสนใจ</li>
+                <li><strong>n(S)</strong> คือ จำนวนผลลัพธ์ทั้งหมดที่เป็นไปได้</li>
+            </ul>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Controls -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-5">
+                <div>
+                    <label id="labelExperiment" class="block text-sm font-semibold text-slate-700 mb-2">เลือกรูปแบบการทดลองสุ่ม:</label>
+                    <select id="experimentSelect" onchange="changeExperiment()" class="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3">
+                        <option value="coin">โยนเหรียญ (นับจำนวนหน้าที่ออกก้อย)</option>
+                        <option value="die1">ทอดลูกเต๋า 1 ลูก (ดูแต้มที่ออก)</option>
+                        <option value="die2">ทอดลูกเต๋า 2 ลูก (ดูผลรวมของแต้ม)</option>
+                    </select>
+                </div>
+                
+                <div id="coinControlGroup">
+                    <label class="flex justify-between text-sm font-semibold text-slate-700 mb-2">
+                        <span id="labelCoin">จำนวนเหรียญ:</span> 
+                        <span id="coinValue" class="text-blue-600">1</span>
+                    </label>
+                    <input type="range" id="coinSlider" min="1" max="5" value="1" step="1">
+                </div>
+
+                <div>
+                    <label class="flex justify-between text-sm font-semibold text-slate-700 mb-2">
+                        <span id="labelTrial">จำนวนครั้งการทดลอง:</span> 
+                        <span id="trialValue" class="text-blue-600">10</span>
+                    </label>
+                    <input type="range" id="trialSlider" min="10" max="5000" value="10" step="10">
+                </div>
+            </div>
+
+            <!-- 3D Canvas -->
+            <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 flex flex-col">
+                <div id="canvas-container"></div>
+                <p id="3dCaption" class="text-xs text-center text-slate-500 mt-2">โมเดล 3 มิติ (ลากเพื่อหมุนมุมกล้อง)</p>
+            </div>
+        </div>
+
+        <!-- Sample Space & Chart -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 font-mono text-sm overflow-hidden text-ellipsis">
+                <strong id="labelSampleSpaceTitle" class="text-slate-700 block mb-1">ปริภูมิตัวอย่าง (Sample Space):</strong>
+                <span class="text-slate-600">S = { <span id="sampleSpaceSet" class="text-blue-600">H, T</span> }</span><br>
+                <span class="text-slate-600">n(S) = <span id="sampleSpaceN" class="text-blue-600 font-bold">2</span></span>
+            </div>
+
+            <div class="relative h-64 md:h-80 w-full mb-6">
+                <canvas id="probabilityChart"></canvas>
+            </div>
+
+            <h3 id="tableTitle" class="text-lg font-bold text-slate-800 mb-3">ตารางเปรียบเทียบผลลัพธ์</h3>
+            <div class="table-container">
+                <table class="w-full text-sm text-left text-slate-600 border border-slate-200 rounded-lg overflow-hidden">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                        <tr>
+                            <th id="thOutcome" class="px-4 py-3 border-b">ผลลัพธ์ (E)</th>
+                            <th id="thFreq" class="px-4 py-3 border-b text-center">ความถี่</th>
+                            <th id="thExpProb" class="px-4 py-3 border-b text-center">จากการทดลอง (%)</th>
+                            <th id="thTheoProb" class="px-4 py-3 border-b text-center">ทฤษฎี (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="divide-y divide-slate-200 bg-white">
+                        <!-- Rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Conclusion Box -->
+        <div class="bg-emerald-50 border-l-4 border-emerald-500 p-5 rounded-r-xl">
+            <h2 id="conclusionTitle" class="text-lg font-bold text-emerald-900 mb-2">ข้อสรุปจากการทดลอง</h2>
+            <p id="conclusionText" class="text-sm md:text-base text-emerald-800">
+                <strong>กฎของจำนวนมาก (Law of Large Numbers):</strong> เมื่อเราเพิ่มจำนวนครั้งที่ทำการทดลองมากขึ้น ค่าความน่าจะเป็นที่ได้จากการทดลองจริง จะลู่เข้าหาค่าความน่าจะเป็นทางทฤษฎี
+            </p>
+        </div>
+
+        <!-- Add Custom Quiz Question -->
+        <div class="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm mt-6">
+            <h2 id="addQuizTitle" class="text-lg font-bold text-indigo-900 mb-4">เพิ่มโจทย์ข้อสอบด้วยตนเอง</h2>
+            <div class="space-y-4">
+                <div>
+                    <label id="labelNewQuestion" class="block text-sm font-semibold text-slate-700 mb-1">โจทย์คำถาม:</label>
+                    <input type="text" id="newQuestionInput" class="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5" placeholder="พิมพ์โจทย์คำถามที่นี่...">
+                </div>
+                <div>
+                    <label id="labelNewAnswer" class="block text-sm font-semibold text-slate-700 mb-1">เฉลย:</label>
+                    <input type="text" id="newAnswerInput" class="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5" placeholder="พิมพ์คำตอบที่นี่...">
+                </div>
+                <div>
+                    <label id="labelNewDifficulty" class="block text-sm font-semibold text-slate-700 mb-1">ระดับความยาก:</label>
+                    <select id="newDifficultySelect" class="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5">
+                        <option value="easy">ระดับง่าย (Easy)</option>
+                        <option value="medium">ปานกลาง (Medium)</option>
+                        <option value="hard">ระดับยาก (Hard)</option>
+                        <option value="expert">ท้าทาย (Expert)</option>
+                    </select>
+                </div>
+                <button id="addQuizBtn" onclick="addCustomQuiz()" class="w-full md:w-auto px-5 py-2.5 bg-indigo-600 text-white font-medium text-sm rounded-lg hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-300 text-center transition-colors">เพิ่มโจทย์</button>
+            </div>
+        </div>
+
+        <!-- Quiz Section -->
+        <div class="bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-sm">
+            <h2 id="quizTitle" class="text-xl font-bold text-amber-900 mb-5">คำถามประเมินความเข้าใจ</h2>
+            
+            <div id="quizContainer" class="space-y-6">
+                <!-- Easy -->
+                <div class="border-b border-amber-200 pb-5">
+                    <div class="flex items-start gap-3 flex-col md:flex-row">
+                        <span id="badgeEasy" class="inline-block px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full whitespace-nowrap">ระดับง่าย</span>
+                        <p class="text-slate-700 text-sm md:text-base"><strong class="q-prefix">ข้อ 1:</strong> <span id="q1Text">ความน่าจะเป็นที่จะได้ "แต้มคู่" จากการทอดลูกเต๋า 1 ลูก คือเท่าใด?</span></p>
+                    </div>
+                    <button onclick="toggleAnswer('ans1')" class="ans-btn mt-3 px-4 py-2 bg-amber-200 text-amber-800 text-sm font-semibold rounded-md hover:bg-amber-300 transition-colors">ดูเฉลย</button>
+                    <div id="ans1" class="hidden mt-3 p-3 bg-white rounded border-l-4 border-green-500 text-sm text-slate-700"><strong class="ansPrefix">เฉลย:</strong> <span id="a1Text">3/6 หรือ 1/2</span></div>
+                </div>
+
+                <!-- Medium -->
+                <div class="border-b border-amber-200 pb-5">
+                    <div class="flex items-start gap-3 flex-col md:flex-row">
+                        <span id="badgeMedium" class="inline-block px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full whitespace-nowrap">ปานกลาง</span>
+                        <p class="text-slate-700 text-sm md:text-base"><strong class="q-prefix">ข้อ 2:</strong> <span id="q2Text">โยนเหรียญ 2 เหรียญ ความน่าจะเป็นที่จะ "ออกหน้าเหมือนกัน" คือเท่าใด?</span></p>
+                    </div>
+                    <button onclick="toggleAnswer('ans2')" class="ans-btn mt-3 px-4 py-2 bg-amber-200 text-amber-800 text-sm font-semibold rounded-md hover:bg-amber-300 transition-colors">ดูเฉลย</button>
+                    <div id="ans2" class="hidden mt-3 p-3 bg-white rounded border-l-4 border-yellow-500 text-sm text-slate-700"><strong class="ansPrefix">เฉลย:</strong> <span id="a2Text">2/4 หรือ 1/2</span></div>
+                </div>
+
+                <!-- Hard -->
+                <div class="border-b border-amber-200 pb-5">
+                    <div class="flex items-start gap-3 flex-col md:flex-row">
+                        <span id="badgeHard" class="inline-block px-3 py-1 bg-orange-500 text-white text-xs font-bold rounded-full whitespace-nowrap">ระดับยาก</span>
+                        <p class="text-slate-700 text-sm md:text-base"><strong class="q-prefix">ข้อ 3:</strong> <span id="q3Text">ทอดลูกเต๋า 2 ลูก ความน่าจะเป็นที่ "ผลรวมแต้มมากกว่า 10" คือเท่าใด?</span></p>
+                    </div>
+                    <button onclick="toggleAnswer('ans3')" class="ans-btn mt-3 px-4 py-2 bg-amber-200 text-amber-800 text-sm font-semibold rounded-md hover:bg-amber-300 transition-colors">ดูเฉลย</button>
+                    <div id="ans3" class="hidden mt-3 p-3 bg-white rounded border-l-4 border-orange-500 text-sm text-slate-700"><strong class="ansPrefix">เฉลย:</strong> <span id="a3Text">3/36 หรือ 1/12</span></div>
+                </div>
+
+                <!-- Expert -->
+                <div>
+                    <div class="flex items-start gap-3 flex-col md:flex-row">
+                        <span id="badgeExpert" class="inline-block px-3 py-1 bg-red-500 text-white text-xs font-bold rounded-full whitespace-nowrap">ท้าทาย</span>
+                        <p class="text-slate-700 text-sm md:text-base"><strong class="q-prefix">ข้อ 4:</strong> <span id="q4Text">โยนเหรียญ 10 ครั้ง ออกก้อย 8 ครั้ง สรุปว่าเหรียญมีโอกาสออกก้อย 80% ถูกหรือไม่?</span></p>
+                    </div>
+                    <button onclick="toggleAnswer('ans4')" class="ans-btn mt-3 px-4 py-2 bg-amber-200 text-amber-800 text-sm font-semibold rounded-md hover:bg-amber-300 transition-colors">ดูเฉลย</button>
+                    <div id="ans4" class="hidden mt-3 p-3 bg-white rounded border-l-4 border-red-500 text-sm text-slate-700"><strong class="ansPrefix">เฉลย:</strong> <span id="a4Text">ไม่ถูก เพราะจำนวนครั้งน้อยไป ต้องทดลองมากขึ้นตามกฎของจำนวนมาก</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Translations
+        const translations = {
+            th: {
+                mainTitle: "การทดลองสุ่มและความน่าจะเป็น",
+                mainSubtitle: "เรียนรู้ความน่าจะเป็นผ่านการทดลองสุ่มและ 3D",
+                theoryTitle: "ทบทวนทฤษฎีความน่าจะเป็น",
+                theoryList: `
+                    <li><strong>P(E)</strong> คือ ความน่าจะเป็นของเหตุการณ์ (Probability of Event)</li>
+                    <li><strong>n(E)</strong> คือ จำนวนผลลัพธ์ที่เราสนใจ</li>
+                    <li><strong>n(S)</strong> คือ จำนวนผลลัพธ์ทั้งหมดที่เป็นไปได้ (Sample Space)</li>
+                `,
+                labelExperiment: "เลือกรูปแบบการทดลองสุ่ม:",
+                expOptions: ["โยนเหรียญ (นับจำนวนหน้าที่ออกก้อย)", "ทอดลูกเต๋า 1 ลูก (ดูแต้มที่ออก)", "ทอดลูกเต๋า 2 ลูก (ดูผลรวมของแต้ม)"],
+                labelCoin: "จำนวนเหรียญ:",
+                labelTrial: "จำนวนครั้งการทดลอง:",
+                labelSampleSpaceTitle: "ปริภูมิตัวอย่าง (Sample Space):",
+                tableTitle: "ตารางเปรียบเทียบผลลัพธ์",
+                thOutcome: "ผลลัพธ์ (E)",
+                thFreq: "ความถี่",
+                thExpProb: "การทดลอง (%)",
+                thTheoProb: "ทฤษฎี (%)",
+                chartTitleY: "ความถี่",
+                chartDatasetExp: "ความถี่จากการทดลอง",
+                chartDatasetTheo: "ค่าคาดหมายทฤษฎี",
+                conclusionTitle: "ข้อสรุปจากการทดลอง",
+                conclusionText: "<strong>กฎของจำนวนมาก (Law of Large Numbers):</strong> เมื่อเราเพิ่มจำนวนครั้งที่ทำการทดลองมากขึ้นเรื่อยๆ ค่าความน่าจะเป็นจากการทดลองจริงจะลู่เข้าหาค่าความน่าจะเป็นทางทฤษฎี",
+                addQuizTitle: "เพิ่มโจทย์ข้อสอบด้วยตนเอง",
+                labelNewQuestion: "โจทย์คำถาม:",
+                labelNewAnswer: "เฉลย:",
+                labelNewDifficulty: "ระดับความยาก:",
+                addQuizBtn: "เพิ่มโจทย์",
+                placeholderQuestion: "พิมพ์โจทย์คำถามที่นี่...",
+                placeholderAnswer: "พิมพ์คำตอบที่นี่...",
+                optEasy: "ระดับง่าย (Easy)",
+                optMedium: "ปานกลาง (Medium)",
+                optHard: "ระดับยาก (Hard)",
+                optExpert: "ท้าทาย (Expert)",
+                quizTitle: "คำถามประเมินความเข้าใจ",
+                qPrefixStr: "ข้อ",
+                showAnsBtn: "ดูเฉลย",
+                ansPrefix: "เฉลย:",
+                badgeEasy: "ระดับง่าย",
+                badgeMedium: "ปานกลาง",
+                badgeHard: "ระดับยาก",
+                badgeExpert: "ท้าทาย",
+                q1: "ความน่าจะเป็นที่จะได้ \"แต้มคู่\" จากการทอดลูกเต๋า 1 ลูก คือเท่าใด?",
+                a1: "3/6 หรือ 1/2 (แต้มคู่มี 2, 4, 6)",
+                q2: "โยนเหรียญ 2 เหรียญ ความน่าจะเป็นที่จะ \"ออกหน้าเหมือนกัน\" (หัว-หัว หรือ ก้อย-ก้อย) คือเท่าใด?",
+                a2: "2/4 หรือ 1/2 (ผลลัพธ์: HH, HT, TH, TT)",
+                q3: "ทอดลูกเต๋า 2 ลูก ความน่าจะเป็นที่ \"ผลรวมแต้มมากกว่า 10\" คือเท่าใด?",
+                a3: "3/36 หรือ 1/12 (ผลรวมที่มากกว่า 10 คือ 11 และ 12 ได้แก่ (5,6), (6,5), (6,6))",
+                q4: "เพื่อนโยนเหรียญ 10 ครั้ง ออกก้อย 8 ครั้ง สรุปว่าเหรียญมีโอกาสออกก้อย 80% ถูกหรือไม่ เพราะเหตุใด?",
+                a4: "ไม่ถูกต้อง จำนวนครั้ง (10) น้อยเกินไป หากจะให้เข้าใกล้ทฤษฎี (50%) ต้องเพิ่มจำนวนการทดลองให้มากขึ้นตาม \"กฎของจำนวนมาก\"",
+                prefixCoin: "ก้อย",
+                prefixFace: "แต้ม",
+                prefixSum: "ผลรวม",
+                caption3D: "โมเดล 3 มิติ (ลากเพื่อหมุนมุมกล้อง)"
+            },
+            en: {
+                mainTitle: "Random Experiments & Probability",
+                mainSubtitle: "Learn probability through random experiments and 3D",
+                theoryTitle: "Probability Theory Review",
+                theoryList: `
+                    <li><strong>P(E)</strong> is the Probability of an Event</li>
+                    <li><strong>n(E)</strong> is the number of favorable outcomes</li>
+                    <li><strong>n(S)</strong> is the total number of possible outcomes (Sample Space)</li>
+                `,
+                labelExperiment: "Select Experiment Type:",
+                expOptions: ["Coin Toss (Count Tails)", "Roll 1 Die (Face Value)", "Roll 2 Dice (Sum of Faces)"],
+                labelCoin: "Number of coins:",
+                labelTrial: "Number of trials:",
+                labelSampleSpaceTitle: "Sample Space:",
+                tableTitle: "Results Comparison Table",
+                thOutcome: "Outcome (E)",
+                thFreq: "Frequency",
+                thExpProb: "Exp. Prob (%)",
+                thTheoProb: "Theo. Prob (%)",
+                chartTitleY: "Frequency",
+                chartDatasetExp: "Experimental Freq.",
+                chartDatasetTheo: "Theoretical Expected",
+                conclusionTitle: "Conclusion",
+                conclusionText: "<strong>Law of Large Numbers:</strong> As the number of trials increases, the experimental probability will converge towards the theoretical probability.",
+                addQuizTitle: "Add Custom Quiz Question",
+                labelNewQuestion: "Question:",
+                labelNewAnswer: "Answer:",
+                labelNewDifficulty: "Difficulty Level:",
+                addQuizBtn: "Add Question",
+                placeholderQuestion: "Type question here...",
+                placeholderAnswer: "Type answer here...",
+                optEasy: "Easy",
+                optMedium: "Medium",
+                optHard: "Hard",
+                optExpert: "Expert",
+                quizTitle: "Assessment Questions",
+                qPrefixStr: "Q",
+                showAnsBtn: "Show Answer",
+                ansPrefix: "Answer:",
+                badgeEasy: "Easy",
+                badgeMedium: "Medium",
+                badgeHard: "Hard",
+                badgeExpert: "Expert",
+                q1: "What is the theoretical probability of getting an \"even number\" when rolling 1 die?",
+                a1: "3/6 or 1/2 (Even numbers: 2, 4, 6)",
+                q2: "When tossing 2 coins, what is the probability of getting \"the same faces\" (HH or TT)?",
+                a2: "2/4 or 1/2 (Outcomes: HH, HT, TH, TT)",
+                q3: "When rolling 2 dice, what is the probability that the \"sum is strictly greater than 10\"?",
+                a3: "3/36 or 1/12 (Sums > 10 are 11, 12: (5,6), (6,5), (6,6))",
+                q4: "A friend tosses a coin 10 times, gets 8 tails, and concludes a 80% chance for tails. Is this correct?",
+                a4: "Incorrect. The number of trials (10) is too small. To approach the theoretical probability (50%), many more trials are needed based on the \"Law of Large Numbers\".",
+                prefixCoin: "Tails:",
+                prefixFace: "Face:",
+                prefixSum: "Sum:",
+                caption3D: "3D Model (Drag to rotate camera)"
+            }
+        };
+
+        let currentLang = 'th';
+        let probChart;
+        let experimentData = { labels: [], expData: [], theoProb: [], totalS: 0, sampleSpaceStr: "", trials: 10 };
+
+        /* Math Helpers */
+        function factorial(n) {
+            if (n === 0 || n === 1) return 1;
+            let res = 1;
+            for (let i = 2; i <= n; i++) res *= i;
+            return res;
+        }
+        function combine(n, r) {
+            return factorial(n) / (factorial(r) * factorial(n - r));
+        }
+
+        let scene, camera, renderer, objects = [];
+        let isDragging = false, previousMousePosition = { x: 0, y: 0 };
+        let rotationGroup;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color('#1e293b'); // Tailwind slate-800
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 5, 5);
+            scene.add(dirLight);
+
+            rotationGroup = new THREE.Group();
+            scene.add(rotationGroup);
+
+            // Interaction
+            renderer.domElement.addEventListener('mousedown', onMouseDown);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+            
+            // Touch support for mobile
+            renderer.domElement.addEventListener('touchstart', onTouchStart, {passive: false});
+            renderer.domElement.addEventListener('touchmove', onTouchMove, {passive: false});
+            window.addEventListener('touchend', onMouseUp);
+
+            window.addEventListener('resize', onWindowResize);
+
+            build3DObjects();
+            animate3D();
+        }
+
+        function onMouseDown(e) { isDragging = true; previousMousePosition = { x: e.offsetX, y: e.offsetY }; }
+        function onMouseMove(e) {
+            if (isDragging && rotationGroup) {
+                let deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
+                rotationGroup.rotation.y += deltaMove.x * 0.01;
+                rotationGroup.rotation.x += deltaMove.y * 0.01;
+                previousMousePosition = { x: e.offsetX, y: e.offsetY };
+            }
+        }
+        function onTouchStart(e) {
+            if(e.touches.length === 1) {
+                isDragging = true;
+                const rect = renderer.domElement.getBoundingClientRect();
+                previousMousePosition = { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+            }
+        }
+        function onTouchMove(e) {
+            if(isDragging && e.touches.length === 1 && rotationGroup) {
+                e.preventDefault(); // prevent scroll while rotating
+                const rect = renderer.domElement.getBoundingClientRect();
+                const x = e.touches[0].clientX - rect.left;
+                const y = e.touches[0].clientY - rect.top;
+                let deltaMove = { x: x - previousMousePosition.x, y: y - previousMousePosition.y };
+                rotationGroup.rotation.y += deltaMove.x * 0.01;
+                rotationGroup.rotation.x += deltaMove.y * 0.01;
+                previousMousePosition = { x: x, y: y };
+            }
+        }
+        function onMouseUp() { isDragging = false; }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            if(container && camera && renderer) {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+        }
+
+        function build3DObjects() {
+            // Clear existing
+            while(rotationGroup.children.length > 0){ 
+                rotationGroup.remove(rotationGroup.children[0]); 
+            }
+            
+            const type = document.getElementById('experimentSelect').value;
+            const num = type === 'coin' ? parseInt(document.getElementById('coinSlider').value) : (type === 'die2' ? 2 : 1);
+            
+            const spacing = 1.2;
+            const startX = -((num - 1) * spacing) / 2;
+
+            for(let i=0; i<num; i++) {
+                let mesh;
+                if(type === 'coin') {
+                    const geo = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.rotation.x = Math.PI / 2;
+                } else {
+                    // Dice
+                    const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    
+                    // Add edges for visibility
+                    const edges = new THREE.EdgesGeometry(geo);
+                    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
+                    mesh.add(line);
+                }
+                mesh.position.x = startX + (i * spacing);
+                rotationGroup.add(mesh);
+            }
+            // Reset rotation
+            rotationGroup.rotation.set(0,0,0);
+            if(type === 'die1' || type === 'die2') {
+                rotationGroup.rotation.x = 0.5;
+                rotationGroup.rotation.y = 0.5;
+            }
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            if(!isDragging && rotationGroup) {
+                rotationGroup.rotation.y += 0.01;
+                rotationGroup.rotation.x += 0.005;
+            }
+            if(renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        function runSimulation() {
+            const type = document.getElementById('experimentSelect').value;
+            const trials = parseInt(document.getElementById('trialSlider').value);
+            const coins = parseInt(document.getElementById('coinSlider').value);
+            
+            let labels = [];
+            let expData = [];
+            let theoProb = [];
+            let sampleStr = "";
+            let nS = 0;
+            const t = translations[currentLang];
+
+            if (type === 'coin') {
+                nS = Math.pow(2, coins);
+                expData = new Array(coins + 1).fill(0);
+                for(let i=0; i<=coins; i++) {
+                    labels.push(`${t.prefixCoin} ${i}`);
+                    theoProb.push(combine(coins, i) / nS);
+                }
+                // Generate random tails
+                for(let i=0; i<trials; i++) {
+                    let tailsCount = 0;
+                    for(let c=0; c<coins; c++) { 
+                        if(Math.random() < 0.5) tailsCount++; 
+                    }
+                    expData[tailsCount]++;
+                }
+                if(coins === 1) sampleStr = "H, T";
+                else if(coins === 2) sampleStr = "HH, HT, TH, TT";
+                else sampleStr = `All ${nS} combinations`;
+            } 
+            else if (type === 'die1') {
+                nS = 6;
+                expData = new Array(6).fill(0);
+                for(let i=1; i<=6; i++) {
+                    labels.push(`${t.prefixFace} ${i}`);
+                    theoProb.push(1/6);
+                }
+                for(let i=0; i<trials; i++) {
+                    let roll = Math.floor(Math.random() * 6);
+                    expData[roll]++;
+                }
+                sampleStr = "1, 2, 3, 4, 5, 6";
+            }
+            else if (type === 'die2') {
+                nS = 36;
+                expData = new Array(11).fill(0); 
+                for(let i=2; i<=12; i++) {
+                    labels.push(`${t.prefixSum} ${i}`);
+                    let ways = 6 - Math.abs(i - 7);
+                    theoProb.push(ways / 36);
+                }
+                for(let i=0; i<trials; i++) {
+                    let roll = (Math.floor(Math.random() * 6) + 1) + (Math.floor(Math.random() * 6) + 1);
+                    expData[roll - 2]++;
+                }
+                sampleStr = "(1,1), (1,2) ... (6,6)";
+            }
+
+            experimentData = { labels, expData, theoProb, totalS: nS, sampleSpaceStr: sampleStr, trials };
+            updateUI();
+            build3DObjects();
+        }
+
+        function updateUI() {
+            const t = translations[currentLang];
+            const d = experimentData;
+
+            document.getElementById('sampleSpaceSet').innerText = d.sampleSpaceStr;
+            document.getElementById('sampleSpaceN').innerText = d.totalS;
+
+            let theoExpectedData = d.theoProb.map(p => p * d.trials); 
+            
+            probChart.data.labels = d.labels;
+            probChart.data.datasets[0].data = d.expData;
+            probChart.data.datasets[0].label = t.chartDatasetExp;
+            probChart.data.datasets[1].data = theoExpectedData;
+            probChart.data.datasets[1].label = t.chartDatasetTheo;
+            probChart.options.scales.y.title.text = t.chartTitleY;
+            probChart.update();
+
+            let tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = "";
+            for(let i=0; i<d.labels.length; i++) {
+                let expP = ((d.expData[i] / d.trials) * 100).toFixed(2);
+                let theoP = (d.theoProb[i] * 100).toFixed(2);
+                
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-4 py-2 border-b text-slate-800 font-medium">${d.labels[i]}</td>
+                    <td class="px-4 py-2 border-b text-center text-slate-700">${d.expData[i]}</td>
+                    <td class="px-4 py-2 border-b text-center text-blue-600 font-semibold">${expP}%</td>
+                    <td class="px-4 py-2 border-b text-center text-slate-500">${theoP}%</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function changeExperiment() {
+            const type = document.getElementById('experimentSelect').value;
+            const coinGroup = document.getElementById('coinControlGroup');
+            if(type === 'coin') {
+                coinGroup.style.display = 'block';
+            } else {
+                coinGroup.style.display = 'none';
+            }
+            runSimulation();
+        }
+
+        document.getElementById('coinSlider').addEventListener('input', function(e) {
+            document.getElementById('coinValue').innerText = e.target.value;
+            runSimulation();
+        });
+
+        document.getElementById('trialSlider').addEventListener('input', function(e) {
+            document.getElementById('trialValue').innerText = e.target.value;
+            runSimulation();
+        });
+
+        let customQuizCounter = 4; // Start after default 4 questions
+
+        function addCustomQuiz() {
+            const questionText = document.getElementById('newQuestionInput').value.trim();
+            const answerText = document.getElementById('newAnswerInput').value.trim();
+            const diffValue = document.getElementById('newDifficultySelect').value;
+
+            if (!questionText || !answerText) {
+                alert(currentLang === 'th' ? "กรุณากรอกโจทย์และเฉลยให้ครบถ้วน" : "Please enter both question and answer.");
+                return;
+            }
+
+            customQuizCounter++;
+            const t = translations[currentLang];
+            const qId = `customAns${customQuizCounter}`;
+            
+            let badgeClass, badgeTextTh, badgeTextEn;
+            if (diffValue === 'easy') { badgeClass = 'bg-green-500'; badgeTextTh = 'ระดับง่าย'; badgeTextEn = 'Easy'; }
+            else if (diffValue === 'medium') { badgeClass = 'bg-yellow-500'; badgeTextTh = 'ปานกลาง'; badgeTextEn = 'Medium'; }
+            else if (diffValue === 'hard') { badgeClass = 'bg-orange-500'; badgeTextTh = 'ระดับยาก'; badgeTextEn = 'Hard'; }
+            else { badgeClass = 'bg-red-500'; badgeTextTh = 'ท้าทาย'; badgeTextEn = 'Expert'; }
+
+            const currentBadgeText = currentLang === 'th' ? badgeTextTh : badgeTextEn;
+
+            const quizHtml = `
+                <div class="border-t border-amber-200 pt-5 mt-5">
+                    <div class="flex items-start gap-3 flex-col md:flex-row">
+                        <span class="custom-badge inline-block px-3 py-1 ${badgeClass} text-white text-xs font-bold rounded-full whitespace-nowrap" data-diff="${diffValue}">${currentBadgeText}</span>
+                        <p class="text-slate-700 text-sm md:text-base"><strong class="q-prefix">${t.qPrefixStr} ${customQuizCounter}:</strong> <span>${questionText}</span></p>
+                    </div>
+                    <button onclick="toggleAnswer('${qId}')" class="ans-btn mt-3 px-4 py-2 bg-amber-200 text-amber-800 text-sm font-semibold rounded-md hover:bg-amber-300 transition-colors">${t.showAnsBtn}</button>
+                    <div id="${qId}" class="hidden mt-3 p-3 bg-white rounded border-l-4 ${badgeClass.replace('bg-', 'border-')} text-sm text-slate-700"><strong class="ansPrefix">${t.ansPrefix}</strong> <span>${answerText}</span></div>
+                </div>
+            `;
+
+            document.getElementById('quizContainer').insertAdjacentHTML('beforeend', quizHtml);
+            
+            // Clear inputs
+            document.getElementById('newQuestionInput').value = '';
+            document.getElementById('newAnswerInput').value = '';
+        }
+
+        function toggleAnswer(id) {
+            const ans = document.getElementById(id);
+            ans.classList.toggle('hidden');
+        }
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            const t = translations[lang];
+
+            // Buttons
+            const btnTH = document.getElementById('btnTH');
+            const btnEN = document.getElementById('btnEN');
+            if(lang === 'th') {
+                btnTH.className = "px-4 py-2 text-sm font-medium rounded-md bg-white shadow-sm text-slate-800";
+                btnEN.className = "px-4 py-2 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-colors";
+            } else {
+                btnEN.className = "px-4 py-2 text-sm font-medium rounded-md bg-white shadow-sm text-slate-800";
+                btnTH.className = "px-4 py-2 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-colors";
+            }
+
+            // Texts
+            document.getElementById('mainTitle').innerText = t.mainTitle;
+            document.getElementById('mainSubtitle').innerText = t.mainSubtitle;
+            document.getElementById('theoryTitle').innerText = t.theoryTitle;
+            document.getElementById('theoryList').innerHTML = t.theoryList;
+            
+            document.getElementById('labelExperiment').innerText = t.labelExperiment;
+            let select = document.getElementById('experimentSelect');
+            select.options[0].text = t.expOptions[0];
+            select.options[1].text = t.expOptions[1];
+            select.options[2].text = t.expOptions[2];
+
+            document.getElementById('labelCoin').innerText = t.labelCoin;
+            document.getElementById('labelTrial').innerText = t.labelTrial;
+            document.getElementById('labelSampleSpaceTitle').innerText = t.labelSampleSpaceTitle;
+            
+            document.getElementById('tableTitle').innerText = t.tableTitle;
+            document.getElementById('thOutcome').innerText = t.thOutcome;
+            document.getElementById('thFreq').innerText = t.thFreq;
+            document.getElementById('thExpProb').innerText = t.thExpProb;
+            document.getElementById('thTheoProb').innerText = t.thTheoProb;
+
+            document.getElementById('conclusionTitle').innerHTML = t.conclusionTitle;
+            document.getElementById('conclusionText').innerHTML = t.conclusionText;
+
+            // New Add Quiz Section
+            document.getElementById('addQuizTitle').innerText = t.addQuizTitle;
+            document.getElementById('labelNewQuestion').innerText = t.labelNewQuestion;
+            document.getElementById('newQuestionInput').placeholder = t.placeholderQuestion;
+            document.getElementById('labelNewAnswer').innerText = t.labelNewAnswer;
+            document.getElementById('newAnswerInput').placeholder = t.placeholderAnswer;
+            document.getElementById('labelNewDifficulty').innerText = t.labelNewDifficulty;
+            document.getElementById('addQuizBtn').innerText = t.addQuizBtn;
+            
+            let diffSelect = document.getElementById('newDifficultySelect');
+            diffSelect.options[0].text = t.optEasy;
+            diffSelect.options[1].text = t.optMedium;
+            diffSelect.options[2].text = t.optHard;
+            diffSelect.options[3].text = t.optExpert;
+
+            document.getElementById('quizTitle').innerText = t.quizTitle;
+            document.getElementById('3dCaption').innerText = t.caption3D;
+            
+            let qPrefixes = document.querySelectorAll('.q-prefix');
+            qPrefixes[0].innerText = `${t.qPrefixStr} 1:`;
+            qPrefixes[1].innerText = `${t.qPrefixStr} 2:`;
+            qPrefixes[2].innerText = `${t.qPrefixStr} 3:`;
+            qPrefixes[3].innerText = `${t.qPrefixStr} 4:`;
+
+            document.getElementById('badgeEasy').innerText = t.badgeEasy;
+            document.getElementById('badgeMedium').innerText = t.badgeMedium;
+            document.getElementById('badgeHard').innerText = t.badgeHard;
+            document.getElementById('badgeExpert').innerText = t.badgeExpert;
+            
+            document.getElementById('q1Text').innerText = t.q1;
+            document.getElementById('q2Text').innerText = t.q2;
+            document.getElementById('q3Text').innerText = t.q3;
+            document.getElementById('q4Text').innerText = t.q4;
+            
+            document.getElementById('a1Text').innerText = t.a1;
+            document.getElementById('a2Text').innerText = t.a2;
+            document.getElementById('a3Text').innerText = t.a3;
+            document.getElementById('a4Text').innerText = t.a4;
+            
+            // Update custom badges
+            document.querySelectorAll('.custom-badge').forEach(badge => {
+                const diff = badge.getAttribute('data-diff');
+                if(diff === 'easy') badge.innerText = t.badgeEasy;
+                if(diff === 'medium') badge.innerText = t.badgeMedium;
+                if(diff === 'hard') badge.innerText = t.badgeHard;
+                if(diff === 'expert') badge.innerText = t.badgeExpert;
+            });
+
+            document.querySelectorAll('.ans-btn').forEach(btn => btn.innerText = t.showAnsBtn);
+            document.querySelectorAll('.ansPrefix').forEach(el => el.innerText = t.ansPrefix);
+
+            runSimulation(); 
+        }
+
+        // Initialize app on load
+        window.onload = function() {
+            const ctx = document.getElementById('probabilityChart').getContext('2d');
+            probChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Experimental',
+                            data: [],
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)', // Tailwind blue-500
+                            borderRadius: 4
+                        },
+                        {
+                            type: 'line',
+                            label: 'Theoretical',
+                            data: [],
+                            borderColor: 'rgba(239, 68, 68, 1)', // Tailwind red-500
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointBackgroundColor: 'rgba(239, 68, 68, 1)'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: '' } },
+                        x: { title: { display: true, text: '' } }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { usePointStyle: true } }
+                    },
+                    animation: { duration: 300 }
+                }
+            });
+            init3D();
+            setLanguage('th');
+        };
+    </script>
+</body>
+</html>
